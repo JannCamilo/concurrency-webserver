@@ -233,23 +233,6 @@ explicitly waits for the child CGI process to complete before continuing and
 accepting more HTTP requests. When making your server multi-threaded, you
 should not modify this section of the code.
 
-## Security Considerations
-
-Running a networked server can be dangerous, especially if you are not
-careful. Thus, security is something you should consider carefully when
-creating a web server. One thing you should always make sure to do is not
-leave your server running beyond testing, thus leaving open a potential
-backdoor into files in your system.
-
-Your system should also make sure to constrain file requests to stay within
-the sub-tree of the file system hierarchy, rooted at the base working
-directory that the server starts in. You must take steps to ensure that
-pathnames that are passed in do not refer to files outside of this sub-tree.
-One simple (perhaps overly conservative) way to do this is to reject any
-pathname with `..` in it, thus avoiding any traversals up the file system
-tree. More sophisticated solutions could use `chroot()` or Linux containers,
-but perhaps those are beyond the scope of the project.
-
 ## Command-line Parameters
 
 Your C program must be invoked exactly as follows:
