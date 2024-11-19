@@ -3,14 +3,14 @@
 
 #define MAXBUF (8192)
 
-// Estructura para pasar parámetros a los hilos
+// Strucure to send the rametres for the threads
 typedef struct {
     char *host;
     int port;
     char *filename;
 } thread_data_t;
 
-// Función para enviar la solicitud HTTP GET
+// Function to send HTTP GET request
 void client_send(int fd, char *filename) {
     char buf[MAXBUF];
     char hostname[MAXBUF];
@@ -23,7 +23,7 @@ void client_send(int fd, char *filename) {
     write_or_die(fd, buf, strlen(buf));
 }
 
-// Función para leer y mostrar la respuesta HTTP
+// Function to show the response HTTP
 void client_print(int fd) {
     char buf[MAXBUF];  
     int n;
@@ -43,7 +43,7 @@ void client_print(int fd) {
     }
 }
 
-// Función que será ejecutada por cada hilo
+// Function execuing by each threads
 void *client_thread(void *arg) {
     thread_data_t *data = (thread_data_t *)arg;
     int clientfd;
@@ -77,20 +77,20 @@ int main(int argc, char *argv[]) {
     port = atoi(argv[2]);
     filename = argv[3];
     
-    // Crear varios hilos para simular múltiples conexiones
+    // Create some threads to simulaed multiple conections
     for (int i = 0; i < num_threads; i++) {
         data[i].host = host;
         data[i].port = port;
         data[i].filename = filename;
         
-        // Crear el hilo
+        // Create the thread
         if (pthread_create(&threads[i], NULL, client_thread, (void *)&data[i]) != 0) {
             fprintf(stderr, "Error to created the thread %d\n", i);
             exit(1);
         }
     }
     
-    // Esperar que todos los hilos terminen
+    // Wait that all the threads finished
     for (int i = 0; i < num_threads; i++) {
         pthread_join(threads[i], NULL);
     }

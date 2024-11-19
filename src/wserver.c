@@ -79,7 +79,7 @@ void *worker(void *arg) {
 }
 
 //
-// ./wserver [-d basedir] [-p port] [-t threads] [-b buffers]
+// ./wserver [-d basedir] [-p port] [-t threads]
 // 
 int main(int argc, char *argv[]) {
     int c;
@@ -107,25 +107,25 @@ int main(int argc, char *argv[]) {
                 exit(EXIT_FAILURE);
             }
             break;
-        case 'b':
+        /*case 'b':
             buffer_size = atoi(optarg);
             if (buffer_size <= 0) {
                 fprintf(stderr, "The size of buffer shloud be a positive integer.\n");
                 exit(EXIT_FAILURE);
             }
-            break;
+            break;*/
         default:
-            fprintf(stderr, "usage: wserver [-d basedir] [-p port] [-t threads] [-b buffers]\n");
+            fprintf(stderr, "usage: wserver [-d basedir] [-p port] [-t threads]\n");
             exit(1);
         }
     
     // run out of this directory
     chdir_or_die(root_dir);
 
-    // Crear el buffer
+    // Create the buffer
     Buffer *buffer = buffer_init(buffer_size);
 
-    // Crear hilos de trabajo
+    // Crete the threads to work
     pthread_t threads[thread_count];
     for (int i = 0; i < thread_count; ++i) {
         if (pthread_create(&threads[i], NULL, worker, (void *)buffer) != 0) {
@@ -134,7 +134,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // Abrir el socket de escucha
+    // Open the socket to listening
     int listen_fd = open_listen_fd_or_die(port);
     while (1) {
         printf("Started serverin the port %d whit %d threads and buffer of size %d\n", port, thread_count, buffer_size);
@@ -142,13 +142,7 @@ int main(int argc, char *argv[]) {
         int client_len = sizeof(client_addr);
         int conn_fd = accept_or_die(listen_fd, (sockaddr_t *) &client_addr, (socklen_t *) &client_len);
         
-        buffer_push(buffer, conn_fd); // Enviar la conexión al buffer para que los hilos la manejen
+        buffer_push(buffer, conn_fd);
     }
-
-    // Unir los hilos (aunque este punto nunca se alcanzará en este diseño)
-    for (int i = 0; i < thread_count; ++i) {
-        pthread_join(threads[i], NULL);
-    }
-
     return 0;
 }
