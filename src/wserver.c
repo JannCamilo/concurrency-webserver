@@ -10,9 +10,9 @@
 #include <sys/socket.h>
 #include <errno.h>
 
-#define DEFAULT_PORT 8111
+#define DEFAULT_PORT 10000
 #define DEFAULT_THREADS 1
-#define DEFAULT_BUFFERS 2
+#define DEFAULT_BUFFERS 1
 #define BUFFER_SIZE 1024
 char default_root[] = ".";
 
@@ -41,54 +41,51 @@ Buffer *buffer_init(int size) {
 void buffer_push(Buffer *b, int conn_fd) {
     pthread_mutex_lock(&b->lock);
     while ((b->end + 1) % b->size == b->start) {
-        printf("Buffer full, waiting space...\n");  // Mensaje cuando el buffer está lleno
-        pthread_cond_wait(&b->not_full, &b->lock); // Esperar si el buffer está lleno
+        printf("Buffer full, waiting space...\n");
+        pthread_cond_wait(&b->not_full, &b->lock);
     }
     b->buffer[b->end] = conn_fd;
     b->end = (b->end + 1) % b->size;
-    printf("Conection %d added to the buffer (start: %d, end: %d)\n", conn_fd, b->start, b->end);  // Mensaje cuando se agrega una conexión
-    pthread_cond_signal(&b->not_empty); // Notificar que hay algo para procesar
+    printf("Connection %d added to the buffer (start: %d, end: %d)\n", conn_fd, b->start, b->end);
+    pthread_cond_signal(&b->not_empty);
     pthread_mutex_unlock(&b->lock);
 }
 
 int buffer_pop(Buffer *b) {
     pthread_mutex_lock(&b->lock);
     while (b->start == b->end) {
-        printf("Buffer empty, waiting a new conecion...\n");  // Mensaje cuando el buffer está vacío
-        pthread_cond_wait(&b->not_empty, &b->lock); // Esperar si el buffer está vacío
+        printf("Buffer empty, waiting for a new connection...\n");
+        pthread_cond_wait(&b->not_empty, &b->lock);
     }
     int conn_fd = b->buffer[b->start];
     b->start = (b->start + 1) % b->size;
-    printf("Conection %d sorted of the buffer (start: %d, end: %d)\n", conn_fd, b->start, b->end);  // Mensaje cuando se retira una conexión
-    pthread_cond_signal(&b->not_full); // Notificar que el buffer no está lleno
+    printf("Connection %d removed from the buffer (start: %d, end: %d)\n", conn_fd, b->start, b->end);
+    pthread_cond_signal(&b->not_full);
     pthread_mutex_unlock(&b->lock);
     return conn_fd;
 }
 
 void *worker(void *arg) {
     Buffer *b = (Buffer *) arg;
-    printf("Thread of work %ld start.\n", pthread_self());  // Mensaje cuando un hilo de trabajo inicia
+    printf("Worker thread %ld started.\n", pthread_self());
 
     while (1) {
-        int conn_fd = buffer_pop(b); // Obtener una conexión del buffer
-        printf("Thread %ld proceing the conection %d.\n", pthread_self(), conn_fd);  // Mensaje cuando un hilo empieza a procesar una conexión
-        request_handle(conn_fd); // Procesar la solicitud del cliente
-        printf("Thread %ld finish of procesing the conection %d.\n", pthread_self(), conn_fd);  // Mensaje cuando un hilo termina de procesar
-        close_or_die(conn_fd); // Cerrar la conexión cuando termine
+        int conn_fd = buffer_pop(b);
+        printf("Thread %ld processing connection %d.\n", pthread_self(), conn_fd);
+        request_handle(conn_fd);
+        printf("Thread %ld finished processing connection %d.\n", pthread_self(), conn_fd);
+        close_or_die(conn_fd);
     }
 }
 
-//
-// ./wserver [-d basedir] [-p port] [-t threads]
-// 
 int main(int argc, char *argv[]) {
     int c;
     char *root_dir = default_root;
     int port = DEFAULT_PORT;
     int thread_count = DEFAULT_THREADS;
     int buffer_size = DEFAULT_BUFFERS;
-    
-    while ((c = getopt(argc, argv, "d:p:t:b")) != -1)
+
+    while ((c = getopt(argc, argv, "d:p:t:b:")) != -1) {
         switch (c) {
         case 'd':
             root_dir = optarg;
@@ -96,52 +93,53 @@ int main(int argc, char *argv[]) {
         case 'p':
             port = atoi(optarg);
             if (port <= 0) {
-                fprintf(stderr, "Port invalid.\n");
+                fprintf(stderr, "Invalid port.\n");
                 exit(EXIT_FAILURE);
             }
             break;
         case 't':
             thread_count = atoi(optarg);
             if (thread_count <= 0) {
-                fprintf(stderr, "The number of threads should be a positive integer.\n");
+                fprintf(stderr, "Number of threads must be a positive integer.\n");
                 exit(EXIT_FAILURE);
             }
             break;
-        /*case 'b':
+        case 'b':
             buffer_size = atoi(optarg);
             if (buffer_size <= 0) {
-                fprintf(stderr, "The size of buffer shloud be a positive integer.\n");
+                fprintf(stderr, "Buffer size must be a positive integer.\n");
                 exit(EXIT_FAILURE);
             }
-            break;*/
+            break;
         default:
-            fprintf(stderr, "usage: wserver [-d basedir] [-p port] [-t threads]\n");
-            exit(1);
+            fprintf(stderr, "Usage: wserver [-d basedir] [-p port] [-t threads] [-b buffer_size]\n");
+            exit(EXIT_FAILURE);
         }
-    
-    // run out of this directory
+    }
+
+    // Change working directory
     chdir_or_die(root_dir);
 
     // Create the buffer
     Buffer *buffer = buffer_init(buffer_size);
 
-    // Crete the threads to work
+    // Create worker threads
     pthread_t threads[thread_count];
     for (int i = 0; i < thread_count; ++i) {
-        if (pthread_create(&threads[i], NULL, worker, (void *)buffer) != 0) {
-            fprintf(stderr, "Error al crear hilo %d\n", i);
+        if (pthread_create(&threads[i], NULL, worker, (void *) buffer) != 0) {
+            fprintf(stderr, "Error creating thread %d\n", i);
             exit(EXIT_FAILURE);
         }
     }
 
-    // Open the socket to listening
+    // Open the socket to listen for connections
     int listen_fd = open_listen_fd_or_die(port);
     while (1) {
-        printf("Started serverin the port %d whit %d threads and buffer of size %d\n", port, thread_count, buffer_size);
+        printf("Server started on port %d with %d threads and buffer size %d\n", port, thread_count, buffer_size);
         struct sockaddr_in client_addr;
         int client_len = sizeof(client_addr);
         int conn_fd = accept_or_die(listen_fd, (sockaddr_t *) &client_addr, (socklen_t *) &client_len);
-        
+
         buffer_push(buffer, conn_fd);
     }
     return 0;

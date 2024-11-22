@@ -64,7 +64,7 @@ void *client_thread(void *arg) {
 int main(int argc, char *argv[]) {
     char *host, *filename;
     int port;
-    int num_threads = 10;  // Número de hilos para la concurrencia
+    int num_threads = 30;  // Número de hilos para la concurrencia
     pthread_t threads[num_threads];
     thread_data_t data[num_threads];
     
