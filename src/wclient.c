@@ -1,16 +1,17 @@
 #include "io_helper.h"
 #include <pthread.h>
+#include <time.h>  // Para medir el tiempo
 
 #define MAXBUF (8192)
 
-// Strucure to send the rametres for the threads
+// Estructura para enviar los parámetros a los hilos
 typedef struct {
     char *host;
     int port;
     char *filename;
 } thread_data_t;
 
-// Function to send HTTP GET request
+// Función para enviar la solicitud HTTP GET
 void client_send(int fd, char *filename) {
     char buf[MAXBUF];
     char hostname[MAXBUF];
@@ -23,7 +24,7 @@ void client_send(int fd, char *filename) {
     write_or_die(fd, buf, strlen(buf));
 }
 
-// Function to show the response HTTP
+// Función para mostrar la respuesta HTTP
 void client_print(int fd) {
     char buf[MAXBUF];  
     int n;
@@ -43,7 +44,7 @@ void client_print(int fd) {
     }
 }
 
-// Function execuing by each threads
+// Función ejecutada por cada hilo
 void *client_thread(void *arg) {
     thread_data_t *data = (thread_data_t *)arg;
     int clientfd;
@@ -64,36 +65,52 @@ void *client_thread(void *arg) {
 int main(int argc, char *argv[]) {
     char *host, *filename;
     int port;
-    int num_threads = 30;  // Número de hilos para la concurrencia
-    pthread_t threads[num_threads];
-    thread_data_t data[num_threads];
-    
-    if (argc != 4) {
-        fprintf(stderr, "Usage: %s <host> <port> <filename>\n", argv[0]);
+    int num_threads = 10;  // Número de hilos para la concurrencia por defecto
+        
+    if (argc != 5) {
+        fprintf(stderr, "Usage: %s <host> <port> <filename> <threads>\n", argv[0]);
         exit(1);
     }
     
     host = argv[1];
     port = atoi(argv[2]);
     filename = argv[3];
+    num_threads= atoi(argv[4]);
+
+    pthread_t threads[num_threads];
+    thread_data_t data[num_threads];
+    struct timespec start, end;  // Para medir el tiempo total
     
-    // Create some threads to simulaed multiple conections
+    // Registrar el tiempo inicial
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    
+    // Crear algunos hilos para simular múltiples conexiones
     for (int i = 0; i < num_threads; i++) {
         data[i].host = host;
         data[i].port = port;
         data[i].filename = filename;
         
-        // Create the thread
+        // Crear el hilo
         if (pthread_create(&threads[i], NULL, client_thread, (void *)&data[i]) != 0) {
-            fprintf(stderr, "Error to created the thread %d\n", i);
+            fprintf(stderr, "Error al crear el hilo %d\n", i);
             exit(1);
         }
     }
     
-    // Wait that all the threads finished
+    // Esperar que todos los hilos terminen
     for (int i = 0; i < num_threads; i++) {
         pthread_join(threads[i], NULL);
     }
+    
+    // Registrar el tiempo final
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    
+    // Calcular el tiempo total en milisegundos
+    double total_duration = (end.tv_sec - start.tv_sec) * 1000.0 + 
+                            (end.tv_nsec - start.tv_nsec) / 1e6;
+    
+    // Mostrar el tiempo total utilizado para procesar todos los hilos
+    printf("Total time to handle %d threads: %.2f ms\n", num_threads, total_duration);
 
     exit(0);
 }
